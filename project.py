@@ -41,10 +41,12 @@ def normalizePlanes(npzarray):
     npzarray[npzarray<0] = 0.
     return npzarray
 
-cand_path = '../subset0/candidates.csv'
+cand_path = '../subset1/candidates.csv'
 cands = readCSV(cand_path)
 
-@profile
+
+from generate import generate_view
+# @profile
 def slice(cands, voxelWidth=65):
     cubes = []
     labels = []
@@ -55,9 +57,9 @@ def slice(cands, voxelWidth=65):
     counter = 0
     num = 0
 
-    for cand in cands[9000:]:
+    for cand in cands:
         # load image
-        img_path = '../subset0/' + cand[0] + '.mhd'
+        img_path = '../subset1/' + cand[0] + '.mhd'
 
         try:
             numpyImage, numpyOrigin, numpySpacing = load_itk_image(img_path)
@@ -68,34 +70,26 @@ def slice(cands, voxelWidth=65):
             files.add(img_path)
             print("adding new file", img_path)
 
-        worldCoord = np.asarray([float(cand[3]),float(cand[2]),float(cand[1])])
-        voxelCoord = worldToVoxelCoord(worldCoord, numpyOrigin, numpySpacing)
-        
-        pos = [voxelCoord[0]-voxelWidth/2, voxelCoord[0]+voxelWidth/2, voxelCoord[1]-voxelWidth/2, voxelCoord[1]+voxelWidth/2, voxelCoord[2]-voxelWidth/2, voxelCoord[2]+voxelWidth/2]
-        pos = [int(i) for i in pos]
-        patch = numpyImage[pos[0]:pos[1],pos[2]:pos[3],pos[4]:pos[5]]
-        patch = normalizePlanes(patch)
-        
-        if patch.shape == (voxelWidth, voxelWidth, voxelWidth):
-            counter += 1
-            if counter % 1000 == 0:
-                assert(len(cubes) == len(labels))
-                # np.savez_compressed('cubes-'+str(num), cubes=cubes)
-                # np.savez_compressed('labels-'+str(num), labels=labels)
-                
-                print(time.time()-curr, "seconds elapsed...")
-
-                num += 1
-                cubes = []
-                labels = []
-                curr = time.time()
-                
-            cubes.append(patch)
-            labels.append(int(cand[4]))
-    
-    return cubes, labels
+        # new part: generate positives here
+        if int(cand[4]) == 1:
+            # print("found one positive")
+            worldCoord = np.asarray([float(cand[3]),float(cand[2]),float(cand[1])])
+            voxelCoord = worldToVoxelCoord(worldCoord, numpyOrigin, numpySpacing)
+            
+            pos = [voxelCoord[0]-voxelWidth/2, voxelCoord[0]+voxelWidth/2, voxelCoord[1]-voxelWidth/2, voxelCoord[1]+voxelWidth/2, voxelCoord[2]-voxelWidth/2, voxelCoord[2]+voxelWidth/2]
+            pos = [int(i) for i in pos]
+            patch = numpyImage[pos[0]:pos[1],pos[2]:pos[3],pos[4]:pos[5]]
+            patch = normalizePlanes(patch)
+            
+            if patch.shape == (voxelWidth, voxelWidth, voxelWidth):               
+                cubes.extend(generate_view(patch))
+                if len(cubes) % 1000 == 0:
+                    counter += 1
+                    print("1000 positive generated, time", time.time() - curr)
+                    curr = time.time()
+                    np.save('positives-'+str(counter), cubes)
 
 
 voxelWidth = 65
-cubes, labels = slice(cands, voxelWidth=65)
+slice(cands, voxelWidth=65)
 
